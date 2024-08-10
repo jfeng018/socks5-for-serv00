@@ -79,6 +79,10 @@ install_socks5(){
     read -p "socks5 程序已存在，是否重新下载覆盖？(Y/N 回车N)" downsocks5
     downsocks5=${downsocks5^^} # 转换为大写
     if [ "$downsocks5" == "Y" ]; then
+      if pgrep s5 > /dev/null; then
+        pkill s5
+        echo "socks5 进程已被终止"
+      fi
       curl -L -sS -o "${FILE_PATH}/s5" "https://github.com/eooce/test/releases/download/freebsd/web"
     else
       echo "使用已存在的 socks5 程序"
@@ -90,7 +94,7 @@ install_socks5(){
     nohup ${FILE_PATH}/s5 -c ${FILE_PATH}/config.json >/dev/null 2>&1 &
 	  sleep 2
     pgrep -x "s5" > /dev/null && echo -e "\e[1;32ms5 is running\e[0m" || { echo -e "\e[1;35ms5 is not running, restarting...\e[0m"; pkill -x "s5" && nohup "${FILE_PATH}/s5" -c ${FILE_PATH}/config.json >/dev/null 2>&1 & sleep 2; echo -e "\e[1;32ms5 restarted\e[0m"; }
-    CURL_OUTPUT=$(curl -s ip.sb --socks5 $SOCKS5_USER:$SOCKS5_PASS@localhost:$SOCKS5_PORT)
+    CURL_OUTPUT=$(curl -s 4.ipw.cn --socks5 $SOCKS5_USER:$SOCKS5_PASS@localhost:$SOCKS5_PORT)
     if [[ $CURL_OUTPUT =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
       echo "代理创建成功，返回的IP是: $CURL_OUTPUT"
       echo "socks://${SOCKS5_USER}:${SOCKS5_PASS}@${CURL_OUTPUT}:${SOCKS5_PORT}"
@@ -177,12 +181,46 @@ install_nezha_agent(){
   TMP_DIRECTORY="$(mktemp -d)"
   ZIP_FILE="${TMP_DIRECTORY}/nezha-agent_freebsd_amd64.zip"
 
-  [ ! -e ${WORKDIR}/start.sh ] && generate_run_agent
-  [ ! -e ${WORKDIR}/nezha-agent ] && download_agent \
-  && decompression "${ZIP_FILE}" \
-  && install_agent
+  # 如果 start.sh 文件不存在，则生成运行代理的脚本
+  if [ ! -e "${WORKDIR}/start.sh" ]; then
+    generate_run_agent
+  else
+    read -p "nezha-agent 配置信息已存在，是否重新配置？(Y/N 回车N)" nezhaagentyn
+    nezhaagentyn=${nezhaagentyn^^} # 转换为大写
+    if [ "$nezhaagentyn" == "Y" ]; then
+      generate_run_agent
+    fi
+  fi
+
+  # 如果 nezha-agent 文件不存在，则下载并解压代理文件，然后进行安装
+  if [ ! -e "${WORKDIR}/nezha-agent" ]; then
+    download_agent
+    decompression "${ZIP_FILE}"
+    install_agent
+  else
+    read -p "nezha-agent 文件已存在，是否重新下载最新版本？(Y/N 回车N)" nezhaagentd
+    nezhaagentd=${nezhaagentd^^} # 转换为大写
+    if [ "$nezhaagentd" == "Y" ]; then
+      rm -rf "${ZIP_FILE}"
+      if pgrep nezha-agent > /dev/null; then
+        pkill nezha-agent
+        echo "nezha-agent 进程已被终止"
+      fi
+      rm -rf "${WORKDIR}/nezha-agent"
+      download_agent
+      decompression "${ZIP_FILE}"
+      install_agent
+    fi
+  fi
+
+  # 删除临时目录
   rm -rf "${TMP_DIRECTORY}"
-  [ -e ${WORKDIR}/start.sh ] && run_agent
+
+  # 如果 start.sh 文件存在，则运行代理
+  if [ -e "${WORKDIR}/start.sh" ]; then
+      run_agent
+  fi
+
 }
 
 ########################梦开始的地方###########################
